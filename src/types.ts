@@ -50,11 +50,29 @@ export interface WorkoutPlan {
   workouts: Workout[];
 }
 
+export interface AdHocActivity {
+  id: string;
+  label: string;
+  type: WorkoutType;
+  startedAt: string;         // ISO timestamp
+  durationMinutes: number;
+}
+
+export interface PendingTimer {
+  timerId: string;
+  fireAt: string;            // ISO timestamp
+  label: string;
+  activityType: WorkoutType;
+  durationMinutes: number;   // nominal length, needed for accurate ad-hoc logging
+  sourceWorkoutId?: string;
+}
+
 export interface DailySession {
   date: string;
   plannedWorkouts: string[];
   completedWorkouts: string[];
   skippedWorkouts: string[];
+  adHocActivities: AdHocActivity[];
   notes: string;
   sorenessRating: number;
   energyRating: number;
@@ -68,4 +86,6 @@ export interface AppState {
   sessions: Record<string, DailySession>;
   easierToday: boolean;
   activeWorkoutId?: string;
+  pushSubscription?: PushSubscriptionJSON;
+  pendingTimers: PendingTimer[];
 }
