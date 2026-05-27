@@ -19,7 +19,7 @@ import { applyVolume, getRecoveryAdvice, rollingStats } from "./progression";
 import { getSession, loadState, saveState, upsertSession } from "./storage";
 import { getOrCreateSubscription } from "./push";
 import { cancelTimer, scheduleTimer } from "./timer-api";
-import type { AppState, DailySession, PendingTimer, Workout, WorkoutType } from "./types";
+import type { AdHocActivity, AppState, DailySession, PendingTimer, Workout, WorkoutType } from "./types";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const dayName = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -79,8 +79,42 @@ function App() {
           onOpenWeek={() => setScreen("week")}
           onOpenRecovery={() => setScreen("recovery")}
           onOpenTimer={() => openTimer()}
-          onLogTimer={(_timerId) => { /* implemented in Task 24 */ }}
-          onDismissTimer={(_timerId) => { /* implemented in Task 24 */ }}
+          onLogTimer={(timerId) => {
+            const timer = state.pendingTimers.find((t) => t.timerId === timerId);
+            if (!timer) return;
+
+            setState((current) => {
+              const currentSession = getSession(current, date);
+              let nextSession: DailySession;
+
+              if (timer.sourceWorkoutId) {
+                nextSession = completeWorkout(currentSession, timer.sourceWorkoutId);
+              } else {
+                const newActivity: AdHocActivity = {
+                  id: timer.timerId,
+                  label: timer.label,
+                  type: timer.activityType,
+                  startedAt: new Date(new Date(timer.fireAt).getTime() - timer.durationMinutes * 60_000).toISOString(),
+                  durationMinutes: timer.durationMinutes,
+                };
+                nextSession = {
+                  ...currentSession,
+                  adHocActivities: [...currentSession.adHocActivities, newActivity],
+                };
+              }
+
+              return {
+                ...upsertSession(current, nextSession),
+                pendingTimers: current.pendingTimers.filter((t) => t.timerId !== timerId),
+              };
+            });
+          }}
+          onDismissTimer={(timerId) => {
+            setState((current) => ({
+              ...current,
+              pendingTimers: current.pendingTimers.filter((t) => t.timerId !== timerId),
+            }));
+          }}
         />
       )}
       {screen === "workout" && activeWorkout && (
