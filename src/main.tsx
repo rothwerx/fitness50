@@ -247,7 +247,7 @@ function WorkoutScreen({
   easierToday: boolean;
   onBack: () => void;
   onDone: () => void;
-  onOpenTimer: (prefill: { durationMinutes: number; label: string; activityType: WorkoutType; sourceWorkoutId: string }) => void;
+  onOpenTimer: (prefill: { durationMinutes: number; label: string; activityType: WorkoutType; sourceWorkoutId?: string }) => void;
 }) {
   const advice = getRecoveryAdvice(session);
   const modifier = Math.min(advice.volumeModifier, easierToday ? 0.85 : 1);
