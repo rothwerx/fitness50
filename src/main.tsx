@@ -37,6 +37,15 @@ function App() {
   const session = getSession(state, date);
   const activeWorkout = state.activeWorkoutId ? getWorkoutForDate(state.activeWorkoutId, state.startDate, date) : undefined;
 
+  const nowMs = Date.now();
+  const firedTimers = state.pendingTimers.filter((t) => new Date(t.fireAt).getTime() <= nowMs);
+
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => forceTick((value) => value + 1), 5000);
+    return () => window.clearInterval(id);
+  }, []);
+
   useEffect(() => saveState(state), [state]);
 
   useEffect(() => {
@@ -62,6 +71,7 @@ function App() {
         <TodayScreen
           state={state}
           session={session}
+          firedTimers={firedTimers}
           onStart={setActiveWorkout}
           onDone={(workoutId) => updateSession(completeWorkout(session, workoutId))}
           onSkip={(workoutId) => updateSession(skipWorkout(session, workoutId))}
@@ -69,6 +79,8 @@ function App() {
           onOpenWeek={() => setScreen("week")}
           onOpenRecovery={() => setScreen("recovery")}
           onOpenTimer={() => openTimer()}
+          onLogTimer={(_timerId) => { /* implemented in Task 24 */ }}
+          onDismissTimer={(_timerId) => { /* implemented in Task 24 */ }}
         />
       )}
       {screen === "workout" && activeWorkout && (
@@ -139,6 +151,7 @@ function App() {
 function TodayScreen({
   state,
   session,
+  firedTimers,
   onStart,
   onDone,
   onSkip,
@@ -146,9 +159,12 @@ function TodayScreen({
   onOpenWeek,
   onOpenRecovery,
   onOpenTimer,
+  onLogTimer,
+  onDismissTimer,
 }: {
   state: AppState;
   session: DailySession;
+  firedTimers: PendingTimer[];
   onStart: (workoutId: string) => void;
   onDone: (workoutId: string) => void;
   onSkip: (workoutId: string) => void;
@@ -156,6 +172,8 @@ function TodayScreen({
   onOpenWeek: () => void;
   onOpenRecovery: () => void;
   onOpenTimer: () => void;
+  onLogTimer: (timerId: string) => void;
+  onDismissTimer: (timerId: string) => void;
 }) {
   const advice = getRecoveryAdvice(session);
   const workouts = session.plannedWorkouts.map((id) => getWorkoutForDate(id, state.startDate, session.date)).filter(Boolean);
@@ -197,6 +215,21 @@ function TodayScreen({
           <span>{state.pendingTimers[0].label} — see timer</span>
         </button>
       )}
+
+      {firedTimers.map((timer) => (
+        <section key={timer.timerId} className="fired-timer-prompt">
+          <p><strong>{timer.label}</strong> finished — log it?</p>
+          <div className="actions">
+            <button className="primary-action" onClick={() => onLogTimer(timer.timerId)}>
+              <Check size={18} />
+              Log it
+            </button>
+            <button className="quiet-action" onClick={() => onDismissTimer(timer.timerId)}>
+              Dismiss
+            </button>
+          </div>
+        </section>
+      ))}
 
       <button className="full-button" onClick={onOpenTimer}>
         <Timer size={20} />
