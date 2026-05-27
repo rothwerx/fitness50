@@ -17,17 +17,34 @@ import "./styles.css";
 import { beginnerProgram, getPhaseName, getProgramWeek, getWorkoutForDate } from "./program";
 import { applyVolume, getRecoveryAdvice, rollingStats } from "./progression";
 import { getSession, loadState, saveState, upsertSession } from "./storage";
-import type { AppState, DailySession, Workout } from "./types";
+import { getOrCreateSubscription } from "./push";
+import { cancelTimer, scheduleTimer } from "./timer-api";
+import type { AdHocActivity, AppState, DailySession, PendingTimer, Workout, WorkoutType } from "./types";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const dayName = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
 
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
-  const [screen, setScreen] = useState<"today" | "workout" | "week" | "recovery">("today");
+  const [screen, setScreen] = useState<"today" | "workout" | "week" | "recovery" | "timer">("today");
+  const [timerPrefill, setTimerPrefill] = useState<{
+    durationMinutes: number;
+    label: string;
+    activityType: WorkoutType;
+    sourceWorkoutId?: string;
+  } | undefined>(undefined);
   const date = todayIso();
   const session = getSession(state, date);
   const activeWorkout = state.activeWorkoutId ? getWorkoutForDate(state.activeWorkoutId, state.startDate, date) : undefined;
+
+  const nowMs = Date.now();
+  const firedTimers = state.pendingTimers.filter((t) => new Date(t.fireAt).getTime() <= nowMs);
+
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => forceTick((value) => value + 1), 5000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => saveState(state), [state]);
 
@@ -43,18 +60,61 @@ function App() {
     setScreen("workout");
   };
 
+  const openTimer = (prefill?: typeof timerPrefill) => {
+    setTimerPrefill(prefill);
+    setScreen("timer");
+  };
+
   return (
     <main className="app-shell">
       {screen === "today" && (
         <TodayScreen
           state={state}
           session={session}
+          firedTimers={firedTimers}
           onStart={setActiveWorkout}
           onDone={(workoutId) => updateSession(completeWorkout(session, workoutId))}
           onSkip={(workoutId) => updateSession(skipWorkout(session, workoutId))}
           onEasier={() => setState((current) => ({ ...current, easierToday: !current.easierToday }))}
           onOpenWeek={() => setScreen("week")}
           onOpenRecovery={() => setScreen("recovery")}
+          onOpenTimer={() => openTimer()}
+          onLogTimer={(timerId) => {
+            const timer = state.pendingTimers.find((t) => t.timerId === timerId);
+            if (!timer) return;
+
+            setState((current) => {
+              const currentSession = getSession(current, date);
+              let nextSession: DailySession;
+
+              if (timer.sourceWorkoutId) {
+                nextSession = completeWorkout(currentSession, timer.sourceWorkoutId);
+              } else {
+                const newActivity: AdHocActivity = {
+                  id: timer.timerId,
+                  label: timer.label,
+                  type: timer.activityType,
+                  startedAt: new Date(new Date(timer.fireAt).getTime() - timer.durationMinutes * 60_000).toISOString(),
+                  durationMinutes: timer.durationMinutes,
+                };
+                nextSession = {
+                  ...currentSession,
+                  adHocActivities: [...currentSession.adHocActivities, newActivity],
+                };
+              }
+
+              return {
+                ...upsertSession(current, nextSession),
+                pendingTimers: current.pendingTimers.filter((t) => t.timerId !== timerId),
+              };
+            });
+          }}
+          onDismissTimer={(timerId) => {
+            setState((current) => ({
+              ...current,
+              pendingTimers: current.pendingTimers.filter((t) => t.timerId !== timerId),
+            }));
+          }}
         />
       )}
       {screen === "workout" && activeWorkout && (
@@ -68,11 +128,55 @@ function App() {
             setState((current) => ({ ...current, activeWorkoutId: undefined }));
             setScreen("today");
           }}
+          onOpenTimer={(prefill) => openTimer(prefill)}
         />
       )}
       {screen === "week" && <WeeklyScreen state={state} onBack={() => setScreen("today")} />}
       {screen === "recovery" && (
         <RecoveryScreen session={session} onBack={() => setScreen("today")} onChange={updateSession} />
+      )}
+      {screen === "timer" && (
+        <TimerScreen
+          prefill={timerPrefill}
+          pendingTimers={state.pendingTimers}
+          onBack={() => setScreen("today")}
+          onStart={async (timer) => {
+            // Always update local state first so the running view appears immediately.
+            setState((current) => ({
+              ...current,
+              pendingTimers: [...current.pendingTimers, timer],
+            }));
+
+            try {
+              const subscription = await getOrCreateSubscription();
+              if (!subscription) {
+                // Permission denied or no service worker. Timer still runs locally.
+                return;
+              }
+              setState((current) => ({ ...current, pushSubscription: subscription }));
+              await scheduleTimer(timer, subscription);
+            } catch (error) {
+              console.error("Failed to schedule timer push:", error);
+              // Keep the local timer; the user just won't get a notification.
+            }
+          }}
+          onCancel={async (timerId) => {
+            const timer = state.pendingTimers.find((t) => t.timerId === timerId);
+            setState((current) => ({
+              ...current,
+              pendingTimers: current.pendingTimers.filter((t) => t.timerId !== timerId),
+            }));
+            setScreen("today");
+
+            if (timer) {
+              try {
+                await cancelTimer(timer.timerId, timer.fireAt);
+              } catch (error) {
+                console.error("Failed to cancel timer on server:", error);
+              }
+            }
+          }}
+        />
       )}
     </main>
   );
@@ -81,21 +185,29 @@ function App() {
 function TodayScreen({
   state,
   session,
+  firedTimers,
   onStart,
   onDone,
   onSkip,
   onEasier,
   onOpenWeek,
   onOpenRecovery,
+  onOpenTimer,
+  onLogTimer,
+  onDismissTimer,
 }: {
   state: AppState;
   session: DailySession;
+  firedTimers: PendingTimer[];
   onStart: (workoutId: string) => void;
   onDone: (workoutId: string) => void;
   onSkip: (workoutId: string) => void;
   onEasier: () => void;
   onOpenWeek: () => void;
   onOpenRecovery: () => void;
+  onOpenTimer: () => void;
+  onLogTimer: (timerId: string) => void;
+  onDismissTimer: (timerId: string) => void;
 }) {
   const advice = getRecoveryAdvice(session);
   const workouts = session.plannedWorkouts.map((id) => getWorkoutForDate(id, state.startDate, session.date)).filter(Boolean);
@@ -130,6 +242,33 @@ function TodayScreen({
         <Metric label="Minutes" value={`${totalMinutes}`} />
         <Metric label="Last 7" value={`${lastSevenMovementDays(state)} days`} />
       </div>
+
+      {state.pendingTimers.length > 0 && (
+        <button className="timer-chip" onClick={onOpenTimer}>
+          <Timer size={18} />
+          <span>{state.pendingTimers[0].label} — see timer</span>
+        </button>
+      )}
+
+      {firedTimers.map((timer) => (
+        <section key={timer.timerId} className="fired-timer-prompt">
+          <p><strong>{timer.label}</strong> finished — log it?</p>
+          <div className="actions">
+            <button className="primary-action" onClick={() => onLogTimer(timer.timerId)}>
+              <Check size={18} />
+              Log it
+            </button>
+            <button className="quiet-action" onClick={() => onDismissTimer(timer.timerId)}>
+              Dismiss
+            </button>
+          </div>
+        </section>
+      ))}
+
+      <button className="full-button" onClick={onOpenTimer}>
+        <Timer size={20} />
+        Start a quick timer
+      </button>
 
       <div className="section-header">
         <h2>Planned movement</h2>
@@ -191,21 +330,17 @@ function WorkoutScreen({
   easierToday,
   onBack,
   onDone,
+  onOpenTimer,
 }: {
   workout: Workout;
   session: DailySession;
   easierToday: boolean;
   onBack: () => void;
   onDone: () => void;
+  onOpenTimer: (prefill: { durationMinutes: number; label: string; activityType: WorkoutType; sourceWorkoutId?: string }) => void;
 }) {
   const advice = getRecoveryAdvice(session);
   const modifier = Math.min(advice.volumeModifier, easierToday ? 0.85 : 1);
-  const [seconds, setSeconds] = useState(0);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setSeconds((value) => value + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   return (
     <section className="screen">
@@ -219,14 +354,6 @@ function WorkoutScreen({
           {workout.rounds && <p className="phase-line">{workout.phase} · {workout.rounds}</p>}
         </div>
       </header>
-
-      <section className="timer-panel">
-        <Timer size={28} />
-        <div>
-          <p>Elapsed</p>
-          <strong>{formatTime(seconds)}</strong>
-        </div>
-      </section>
 
       <div className="exercise-list">
         {workout.exercises.map((exercise, index) => (
@@ -247,6 +374,21 @@ function WorkoutScreen({
         <h2>Keep it repeatable</h2>
         <p>{workout.guidance ?? advice.message}</p>
       </section>
+
+      <button
+        className="full-button"
+        onClick={() =>
+          onOpenTimer({
+            durationMinutes: workout.estimatedDuration,
+            label: workout.title,
+            activityType: workout.type,
+            sourceWorkoutId: workout.id,
+          })
+        }
+      >
+        <Timer size={20} />
+        Start timer ({workout.estimatedDuration} min)
+      </button>
 
       <button className="full-button primary" onClick={onDone}>
         <Check size={20} />
@@ -287,7 +429,10 @@ function WeeklyScreen({ state, onBack }: { state: AppState; onBack: () => void }
         <h2>Last 7 days</h2>
         <div className="day-strip">
           {week.reverse().map((day) => (
-            <div className={`day-dot ${day.completedWorkouts.length ? "complete" : ""}`} key={day.date}>
+            <div
+              className={`day-dot ${day.completedWorkouts.length > 0 || day.adHocActivities.length > 0 ? "complete" : ""}`}
+              key={day.date}
+            >
               <span>{new Date(`${day.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" }).slice(0, 1)}</span>
             </div>
           ))}
@@ -419,15 +564,173 @@ function lastNDays(count: number) {
 }
 
 function lastSevenMovementDays(state: AppState) {
-  return lastNDays(7).filter((date) => getSession(state, date).completedWorkouts.length > 0).length;
+  return lastNDays(7).filter((date) => {
+    const session = getSession(state, date);
+    return session.completedWorkouts.length > 0 || session.adHocActivities.length > 0;
+  }).length;
 }
 
-function formatTime(seconds: number) {
-  const minutes = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const remaining = (seconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${remaining}`;
+function TimerScreen({
+  prefill,
+  pendingTimers,
+  onBack,
+  onStart,
+  onCancel,
+}: {
+  prefill?: { durationMinutes: number; label: string; activityType: WorkoutType; sourceWorkoutId?: string };
+  pendingTimers: PendingTimer[];
+  onBack: () => void;
+  onStart: (timer: PendingTimer) => void;
+  onCancel: (timerId: string) => void;
+}) {
+  const running = pendingTimers[0]; // v1: single timer at a time
+
+  const [activityType, setActivityType] = useState<WorkoutType>(prefill?.activityType ?? "cardio");
+  const [label, setLabel] = useState(prefill?.label ?? "Walk");
+  const [durationMinutes, setDurationMinutes] = useState(prefill?.durationMinutes ?? 30);
+
+  if (running) {
+    return <TimerRunningView timer={running} onBack={onBack} onCancel={onCancel} />;
+  }
+
+  const handleStart = () => {
+    const timerId = crypto.randomUUID();
+    const fireAt = new Date(Date.now() + durationMinutes * 60_000).toISOString();
+    onStart({
+      timerId,
+      fireAt,
+      label,
+      activityType,
+      durationMinutes,
+      sourceWorkoutId: prefill?.sourceWorkoutId,
+    });
+  };
+
+  return (
+    <section className="screen">
+      <header className="topbar">
+        <button className="icon-button" onClick={onBack} aria-label="Back to today">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="topbar-fill">
+          <p className="eyebrow">Standalone timer</p>
+          <h1>Start a timer</h1>
+        </div>
+      </header>
+
+      <section className="timer-picker">
+        <h2>Activity</h2>
+        <div className="chip-row">
+          {(["cardio", "mobility", "strength", "recovery"] as const).map((type) => (
+            <button
+              key={type}
+              className={`chip ${activityType === type ? "active" : ""}`}
+              onClick={() => setActivityType(type)}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+
+        <h2>Label</h2>
+        <input
+          type="text"
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          placeholder="Walk, stretch, etc."
+        />
+
+        <h2>Duration</h2>
+        <div className="chip-row">
+          {[10, 20, 30, 45, 60].map((minutes) => (
+            <button
+              key={minutes}
+              className={`chip ${durationMinutes === minutes ? "active" : ""}`}
+              onClick={() => setDurationMinutes(minutes)}
+            >
+              {minutes} min
+            </button>
+          ))}
+          <input
+            type="number"
+            min={1}
+            max={240}
+            value={durationMinutes}
+            onChange={(event) => setDurationMinutes(Math.max(1, Number(event.target.value) || 1))}
+            className="duration-custom"
+            aria-label="Custom duration in minutes"
+          />
+        </div>
+      </section>
+
+      <button
+        className="full-button primary"
+        onClick={handleStart}
+        disabled={!label.trim() || durationMinutes < 1}
+      >
+        <Play size={20} />
+        Start {durationMinutes}-min {activityType}
+      </button>
+    </section>
+  );
+}
+
+function TimerRunningView({
+  timer,
+  onBack,
+  onCancel,
+}: {
+  timer: PendingTimer;
+  onBack: () => void;
+  onCancel: (timerId: string) => void;
+}) {
+  const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => forceRender((value) => value + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const fireAtMs = new Date(timer.fireAt).getTime();
+  const remainingMs = Math.max(0, fireAtMs - Date.now());
+  const remainingSeconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(remainingSeconds / 60).toString().padStart(2, "0");
+  const seconds = (remainingSeconds % 60).toString().padStart(2, "0");
+  const isDone = remainingMs === 0;
+  const canNotify = typeof Notification !== "undefined" && Notification.permission === "granted";
+
+  const hint = isDone
+    ? "Time's up — log it from Today when you're back."
+    : canNotify
+      ? "Lock your phone — we'll notify you when it's done."
+      : "No notification — open the app to check.";
+
+  return (
+    <section className="screen">
+      <header className="topbar">
+        <button className="icon-button" onClick={onBack} aria-label="Back to today">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="topbar-fill">
+          <p className="eyebrow">{timer.activityType}</p>
+          <h1>{timer.label}</h1>
+        </div>
+      </header>
+
+      <section className="timer-countdown">
+        <Timer size={48} />
+        <strong className="countdown-display">{minutes}:{seconds}</strong>
+        <p className="countdown-hint">{hint}</p>
+      </section>
+
+      <button className="full-button" onClick={() => onCancel(timer.timerId)}>
+        Cancel timer
+      </button>
+      <button className="full-button primary" onClick={() => onCancel(timer.timerId)}>
+        Done early
+      </button>
+    </section>
+  );
 }
 
 createRoot(document.getElementById("root")!).render(

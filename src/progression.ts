@@ -40,11 +40,19 @@ export function applyVolume(value: number | undefined, modifier: number): number
 }
 
 export function rollingStats(sessions: DailySession[]) {
-  const completedDays = sessions.filter((session) => session.completedWorkouts.length > 0).length;
   const plannedDays = sessions.filter((session) => session.plannedWorkouts.length > 0).length || 1;
+  const completedDays = sessions.filter(
+    (session) => session.completedWorkouts.length > 0 || session.adHocActivities.length > 0,
+  ).length;
+
   const cardioMinutes = sessions.reduce((total, session) => {
-    const cardioCount = session.completedWorkouts.filter((id) => id === "walk30" || id === "intervals").length;
-    return total + cardioCount * 24;
+    const plannedCardioCount = session.completedWorkouts.filter(
+      (id) => id === "walk30" || id === "intervals",
+    ).length;
+    const adHocCardioMinutes = session.adHocActivities
+      .filter((activity) => activity.type === "cardio")
+      .reduce((sum, activity) => sum + activity.durationMinutes, 0);
+    return total + plannedCardioCount * 24 + adHocCardioMinutes;
   }, 0);
 
   return {

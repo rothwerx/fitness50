@@ -1,0 +1,10 @@
+name = "fitness50-timer-fire"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "TIMERS_KV"
+id = "d8bcb4c16b1e4fadbe98d7b08214ef38"

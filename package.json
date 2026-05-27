@@ -17,7 +17,9 @@
     "vite": "^7.2.4"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260527.1",
     "@types/react": "^19.2.15",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "wrangler": "^4.95.0"
   }
 }
