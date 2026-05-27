@@ -17,6 +17,8 @@ import "./styles.css";
 import { beginnerProgram, getPhaseName, getProgramWeek, getWorkoutForDate } from "./program";
 import { applyVolume, getRecoveryAdvice, rollingStats } from "./progression";
 import { getSession, loadState, saveState, upsertSession } from "./storage";
+import { getOrCreateSubscription } from "./push";
+import { cancelTimer, scheduleTimer } from "./timer-api";
 import type { AppState, DailySession, PendingTimer, Workout, WorkoutType } from "./types";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -92,20 +94,41 @@ function App() {
           prefill={timerPrefill}
           pendingTimers={state.pendingTimers}
           onBack={() => setScreen("today")}
-          onStart={(timer) => {
+          onStart={async (timer) => {
+            // Always update local state first so the running view appears immediately.
             setState((current) => ({
               ...current,
               pendingTimers: [...current.pendingTimers, timer],
             }));
-            // backend POST added in Slice E
+
+            try {
+              const subscription = await getOrCreateSubscription();
+              if (!subscription) {
+                // Permission denied or no service worker. Timer still runs locally.
+                return;
+              }
+              setState((current) => ({ ...current, pushSubscription: subscription }));
+              await scheduleTimer(timer, subscription);
+            } catch (error) {
+              console.error("Failed to schedule timer push:", error);
+              // Keep the local timer; the user just won't get a notification.
+            }
           }}
-          onCancel={(timerId) => {
+          onCancel={async (timerId) => {
+            const timer = state.pendingTimers.find((t) => t.timerId === timerId);
             setState((current) => ({
               ...current,
               pendingTimers: current.pendingTimers.filter((t) => t.timerId !== timerId),
             }));
             setScreen("today");
-            // backend DELETE added in Slice E
+
+            if (timer) {
+              try {
+                await cancelTimer(timer.timerId, timer.fireAt);
+              } catch (error) {
+                console.error("Failed to cancel timer on server:", error);
+              }
+            }
           }}
         />
       )}
