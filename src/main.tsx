@@ -429,7 +429,10 @@ function WeeklyScreen({ state, onBack }: { state: AppState; onBack: () => void }
         <h2>Last 7 days</h2>
         <div className="day-strip">
           {week.reverse().map((day) => (
-            <div className={`day-dot ${day.completedWorkouts.length ? "complete" : ""}`} key={day.date}>
+            <div
+              className={`day-dot ${day.completedWorkouts.length > 0 || day.adHocActivities.length > 0 ? "complete" : ""}`}
+              key={day.date}
+            >
               <span>{new Date(`${day.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" }).slice(0, 1)}</span>
             </div>
           ))}
@@ -561,7 +564,10 @@ function lastNDays(count: number) {
 }
 
 function lastSevenMovementDays(state: AppState) {
-  return lastNDays(7).filter((date) => getSession(state, date).completedWorkouts.length > 0).length;
+  return lastNDays(7).filter((date) => {
+    const session = getSession(state, date);
+    return session.completedWorkouts.length > 0 || session.adHocActivities.length > 0;
+  }).length;
 }
 
 function TimerScreen({
