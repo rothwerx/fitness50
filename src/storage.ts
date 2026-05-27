@@ -16,6 +16,7 @@ export const defaultState = (): AppState => ({
   startDate: todayIso(),
   sessions: {},
   easierToday: false,
+  pendingTimers: [],
 });
 
 export function loadState(): AppState {
@@ -43,6 +44,7 @@ export function getSession(state: AppState, date = todayIso()): DailySession {
       plannedWorkouts,
       completedWorkouts: saved.completedWorkouts.filter((id) => plannedWorkouts.includes(id)),
       skippedWorkouts: saved.skippedWorkouts.filter((id) => plannedWorkouts.includes(id)),
+      adHocActivities: saved.adHocActivities ?? [],
     };
   }
 
@@ -51,6 +53,7 @@ export function getSession(state: AppState, date = todayIso()): DailySession {
     plannedWorkouts,
     completedWorkouts: [],
     skippedWorkouts: [],
+    adHocActivities: [],
     notes: "",
     sorenessRating: 2,
     energyRating: 3,
