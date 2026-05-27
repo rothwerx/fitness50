@@ -19,32 +19,32 @@ interface TimerRecord {
 }
 
 async function sendPush(record: TimerRecord, env: Env): Promise<void> {
-  const subscription: PushSubscription = {
-    endpoint: record.subscription.endpoint,
-    expirationTime: null,
-    keys: record.subscription.keys,
-  };
-
-  const vapid: VapidKeys = {
-    subject: env.VAPID_SUBJECT,
-    publicKey: env.VAPID_PUBLIC_KEY,
-    privateKey: env.VAPID_PRIVATE_KEY,
-  };
-
-  const payload = await buildPushPayload(
-    {
-      data: {
-        title: record.title,
-        body: record.body,
-        timerId: record.timerId,
-      },
-      options: { ttl: 60, urgency: "high" },
-    },
-    subscription,
-    vapid,
-  );
-
   try {
+    const subscription: PushSubscription = {
+      endpoint: record.subscription.endpoint,
+      expirationTime: null,
+      keys: record.subscription.keys,
+    };
+
+    const vapid: VapidKeys = {
+      subject: env.VAPID_SUBJECT,
+      publicKey: env.VAPID_PUBLIC_KEY,
+      privateKey: env.VAPID_PRIVATE_KEY,
+    };
+
+    const payload = await buildPushPayload(
+      {
+        data: {
+          title: record.title,
+          body: record.body,
+          timerId: record.timerId,
+        },
+        options: { ttl: 60, urgency: "high" },
+      },
+      subscription,
+      vapid,
+    );
+
     const response = await fetch(record.subscription.endpoint, {
       method: payload.method,
       headers: payload.headers,
@@ -66,6 +66,7 @@ async function sendPush(record: TimerRecord, env: Env): Promise<void> {
 export default {
   async scheduled(_ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const nowKey = `timer:${new Date().toISOString()}:`;
+    // list() returns at most 1000 keys; sufficient for single-user scale.
     const { keys } = await env.TIMERS_KV.list({ prefix: "timer:" });
     const due = keys.filter((k) => k.name < nowKey);
 
