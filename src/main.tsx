@@ -24,7 +24,13 @@ const dayName = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "sh
 
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
-  const [screen, setScreen] = useState<"today" | "workout" | "week" | "recovery">("today");
+  const [screen, setScreen] = useState<"today" | "workout" | "week" | "recovery" | "timer">("today");
+  const [timerPrefill, setTimerPrefill] = useState<{
+    durationMinutes: number;
+    label: string;
+    activityType: import("./types").WorkoutType;
+    sourceWorkoutId?: string;
+  } | undefined>(undefined);
   const date = todayIso();
   const session = getSession(state, date);
   const activeWorkout = state.activeWorkoutId ? getWorkoutForDate(state.activeWorkoutId, state.startDate, date) : undefined;
@@ -41,6 +47,11 @@ function App() {
   const setActiveWorkout = (workoutId: string) => {
     setState((current) => ({ ...current, activeWorkoutId: workoutId }));
     setScreen("workout");
+  };
+
+  const openTimer = (prefill?: typeof timerPrefill) => {
+    setTimerPrefill(prefill);
+    setScreen("timer");
   };
 
   return (
@@ -73,6 +84,15 @@ function App() {
       {screen === "week" && <WeeklyScreen state={state} onBack={() => setScreen("today")} />}
       {screen === "recovery" && (
         <RecoveryScreen session={session} onBack={() => setScreen("today")} onChange={updateSession} />
+      )}
+      {screen === "timer" && (
+        <TimerScreen
+          prefill={timerPrefill}
+          pendingTimers={state.pendingTimers}
+          onBack={() => setScreen("today")}
+          onStart={() => { /* implemented in Task 4 */ }}
+          onCancel={() => { /* implemented in Task 5 */ }}
+        />
       )}
     </main>
   );
@@ -428,6 +448,34 @@ function formatTime(seconds: number) {
     .padStart(2, "0");
   const remaining = (seconds % 60).toString().padStart(2, "0");
   return `${minutes}:${remaining}`;
+}
+
+function TimerScreen({
+  prefill: _prefill,
+  pendingTimers: _pendingTimers,
+  onBack,
+  onStart: _onStart,
+  onCancel: _onCancel,
+}: {
+  prefill?: { durationMinutes: number; label: string; activityType: import("./types").WorkoutType; sourceWorkoutId?: string };
+  pendingTimers: import("./types").PendingTimer[];
+  onBack: () => void;
+  onStart: (timer: import("./types").PendingTimer) => void;
+  onCancel: (timerId: string) => void;
+}) {
+  return (
+    <section className="screen">
+      <header className="topbar">
+        <button className="icon-button" onClick={onBack} aria-label="Back to today">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="topbar-fill">
+          <h1>Timer</h1>
+        </div>
+      </header>
+      <p>Stub — picker and running view come in Tasks 4 and 5.</p>
+    </section>
+  );
 }
 
 createRoot(document.getElementById("root")!).render(
