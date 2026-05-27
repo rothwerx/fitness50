@@ -66,6 +66,7 @@ function App() {
           onEasier={() => setState((current) => ({ ...current, easierToday: !current.easierToday }))}
           onOpenWeek={() => setScreen("week")}
           onOpenRecovery={() => setScreen("recovery")}
+          onOpenTimer={() => openTimer()}
         />
       )}
       {screen === "workout" && activeWorkout && (
@@ -120,6 +121,7 @@ function TodayScreen({
   onEasier,
   onOpenWeek,
   onOpenRecovery,
+  onOpenTimer,
 }: {
   state: AppState;
   session: DailySession;
@@ -129,6 +131,7 @@ function TodayScreen({
   onEasier: () => void;
   onOpenWeek: () => void;
   onOpenRecovery: () => void;
+  onOpenTimer: () => void;
 }) {
   const advice = getRecoveryAdvice(session);
   const workouts = session.plannedWorkouts.map((id) => getWorkoutForDate(id, state.startDate, session.date)).filter(Boolean);
@@ -163,6 +166,18 @@ function TodayScreen({
         <Metric label="Minutes" value={`${totalMinutes}`} />
         <Metric label="Last 7" value={`${lastSevenMovementDays(state)} days`} />
       </div>
+
+      {state.pendingTimers.length > 0 && (
+        <button className="timer-chip" onClick={onOpenTimer}>
+          <Timer size={18} />
+          <span>{state.pendingTimers[0].label} — see timer</span>
+        </button>
+      )}
+
+      <button className="full-button" onClick={onOpenTimer}>
+        <Timer size={20} />
+        Start a quick timer
+      </button>
 
       <div className="section-header">
         <h2>Planned movement</h2>
