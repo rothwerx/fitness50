@@ -80,6 +80,7 @@ function App() {
             setState((current) => ({ ...current, activeWorkoutId: undefined }));
             setScreen("today");
           }}
+          onOpenTimer={(prefill) => openTimer(prefill)}
         />
       )}
       {screen === "week" && <WeeklyScreen state={state} onBack={() => setScreen("today")} />}
@@ -239,21 +240,17 @@ function WorkoutScreen({
   easierToday,
   onBack,
   onDone,
+  onOpenTimer,
 }: {
   workout: Workout;
   session: DailySession;
   easierToday: boolean;
   onBack: () => void;
   onDone: () => void;
+  onOpenTimer: (prefill: { durationMinutes: number; label: string; activityType: WorkoutType; sourceWorkoutId: string }) => void;
 }) {
   const advice = getRecoveryAdvice(session);
   const modifier = Math.min(advice.volumeModifier, easierToday ? 0.85 : 1);
-  const [seconds, setSeconds] = useState(0);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setSeconds((value) => value + 1), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   return (
     <section className="screen">
@@ -267,14 +264,6 @@ function WorkoutScreen({
           {workout.rounds && <p className="phase-line">{workout.phase} · {workout.rounds}</p>}
         </div>
       </header>
-
-      <section className="timer-panel">
-        <Timer size={28} />
-        <div>
-          <p>Elapsed</p>
-          <strong>{formatTime(seconds)}</strong>
-        </div>
-      </section>
 
       <div className="exercise-list">
         {workout.exercises.map((exercise, index) => (
@@ -295,6 +284,21 @@ function WorkoutScreen({
         <h2>Keep it repeatable</h2>
         <p>{workout.guidance ?? advice.message}</p>
       </section>
+
+      <button
+        className="full-button"
+        onClick={() =>
+          onOpenTimer({
+            durationMinutes: workout.estimatedDuration,
+            label: workout.title,
+            activityType: workout.type,
+            sourceWorkoutId: workout.id,
+          })
+        }
+      >
+        <Timer size={20} />
+        Start timer ({workout.estimatedDuration} min)
+      </button>
 
       <button className="full-button primary" onClick={onDone}>
         <Check size={20} />
@@ -468,14 +472,6 @@ function lastNDays(count: number) {
 
 function lastSevenMovementDays(state: AppState) {
   return lastNDays(7).filter((date) => getSession(state, date).completedWorkouts.length > 0).length;
-}
-
-function formatTime(seconds: number) {
-  const minutes = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const remaining = (seconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${remaining}`;
 }
 
 function TimerScreen({
