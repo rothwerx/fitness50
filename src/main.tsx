@@ -17,7 +17,7 @@ import "./styles.css";
 import { beginnerProgram, getPhaseName, getProgramWeek, getWorkoutForDate } from "./program";
 import { applyVolume, getRecoveryAdvice, rollingStats } from "./progression";
 import { getSession, loadState, saveState, upsertSession } from "./storage";
-import type { AppState, DailySession, Workout } from "./types";
+import type { AppState, DailySession, PendingTimer, Workout, WorkoutType } from "./types";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const dayName = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -28,7 +28,7 @@ function App() {
   const [timerPrefill, setTimerPrefill] = useState<{
     durationMinutes: number;
     label: string;
-    activityType: import("./types").WorkoutType;
+    activityType: WorkoutType;
     sourceWorkoutId?: string;
   } | undefined>(undefined);
   const date = todayIso();
@@ -470,15 +470,15 @@ function TimerScreen({
   onStart,
   onCancel,
 }: {
-  prefill?: { durationMinutes: number; label: string; activityType: import("./types").WorkoutType; sourceWorkoutId?: string };
-  pendingTimers: import("./types").PendingTimer[];
+  prefill?: { durationMinutes: number; label: string; activityType: WorkoutType; sourceWorkoutId?: string };
+  pendingTimers: PendingTimer[];
   onBack: () => void;
-  onStart: (timer: import("./types").PendingTimer) => void;
+  onStart: (timer: PendingTimer) => void;
   onCancel: (timerId: string) => void;
 }) {
   const running = pendingTimers[0]; // v1: single timer at a time
 
-  const [activityType, setActivityType] = useState<import("./types").WorkoutType>(prefill?.activityType ?? "cardio");
+  const [activityType, setActivityType] = useState<WorkoutType>(prefill?.activityType ?? "cardio");
   const [label, setLabel] = useState(prefill?.label ?? "Walk");
   const [durationMinutes, setDurationMinutes] = useState(prefill?.durationMinutes ?? 30);
 
@@ -573,7 +573,7 @@ function TimerRunningView({
   onBack,
   onCancel,
 }: {
-  timer: import("./types").PendingTimer;
+  timer: PendingTimer;
   onBack: () => void;
   onCancel: (timerId: string) => void;
 }) {
