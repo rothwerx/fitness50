@@ -90,8 +90,21 @@ function App() {
           prefill={timerPrefill}
           pendingTimers={state.pendingTimers}
           onBack={() => setScreen("today")}
-          onStart={() => { /* implemented in Task 4 */ }}
-          onCancel={() => { /* implemented in Task 5 */ }}
+          onStart={(timer) => {
+            setState((current) => ({
+              ...current,
+              pendingTimers: [...current.pendingTimers, timer],
+            }));
+            // backend POST added in Slice E
+          }}
+          onCancel={(timerId) => {
+            setState((current) => ({
+              ...current,
+              pendingTimers: current.pendingTimers.filter((t) => t.timerId !== timerId),
+            }));
+            setScreen("today");
+            // backend DELETE added in Slice E
+          }}
         />
       )}
     </main>
@@ -558,12 +571,33 @@ function TimerScreen({
 function TimerRunningView({
   timer,
   onBack,
-  onCancel: _onCancel,
+  onCancel,
 }: {
   timer: import("./types").PendingTimer;
   onBack: () => void;
   onCancel: (timerId: string) => void;
 }) {
+  const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => forceRender((value) => value + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const fireAtMs = new Date(timer.fireAt).getTime();
+  const remainingMs = Math.max(0, fireAtMs - Date.now());
+  const remainingSeconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(remainingSeconds / 60).toString().padStart(2, "0");
+  const seconds = (remainingSeconds % 60).toString().padStart(2, "0");
+  const isDone = remainingMs === 0;
+  const canNotify = typeof Notification !== "undefined" && Notification.permission === "granted";
+
+  const hint = isDone
+    ? "Time's up — log it from Today when you're back."
+    : canNotify
+      ? "Lock your phone — we'll notify you when it's done."
+      : "No notification — open the app to check.";
+
   return (
     <section className="screen">
       <header className="topbar">
@@ -571,10 +605,23 @@ function TimerRunningView({
           <ChevronLeft size={24} />
         </button>
         <div className="topbar-fill">
+          <p className="eyebrow">{timer.activityType}</p>
           <h1>{timer.label}</h1>
         </div>
       </header>
-      <p>Running view stub — implemented in Task 5.</p>
+
+      <section className="timer-countdown">
+        <Timer size={48} />
+        <strong className="countdown-display">{minutes}:{seconds}</strong>
+        <p className="countdown-hint">{hint}</p>
+      </section>
+
+      <button className="full-button" onClick={() => onCancel(timer.timerId)}>
+        Cancel timer
+      </button>
+      <button className="full-button primary" onClick={() => onCancel(timer.timerId)}>
+        Done early
+      </button>
     </section>
   );
 }
