@@ -451,16 +451,117 @@ function formatTime(seconds: number) {
 }
 
 function TimerScreen({
-  prefill: _prefill,
-  pendingTimers: _pendingTimers,
+  prefill,
+  pendingTimers,
   onBack,
-  onStart: _onStart,
-  onCancel: _onCancel,
+  onStart,
+  onCancel,
 }: {
   prefill?: { durationMinutes: number; label: string; activityType: import("./types").WorkoutType; sourceWorkoutId?: string };
   pendingTimers: import("./types").PendingTimer[];
   onBack: () => void;
   onStart: (timer: import("./types").PendingTimer) => void;
+  onCancel: (timerId: string) => void;
+}) {
+  const running = pendingTimers[0]; // v1: single timer at a time
+
+  const [activityType, setActivityType] = useState<import("./types").WorkoutType>(prefill?.activityType ?? "cardio");
+  const [label, setLabel] = useState(prefill?.label ?? "Walk");
+  const [durationMinutes, setDurationMinutes] = useState(prefill?.durationMinutes ?? 30);
+
+  if (running) {
+    return <TimerRunningView timer={running} onBack={onBack} onCancel={onCancel} />;
+  }
+
+  const handleStart = () => {
+    const timerId = crypto.randomUUID();
+    const fireAt = new Date(Date.now() + durationMinutes * 60_000).toISOString();
+    onStart({
+      timerId,
+      fireAt,
+      label,
+      activityType,
+      durationMinutes,
+      sourceWorkoutId: prefill?.sourceWorkoutId,
+    });
+  };
+
+  return (
+    <section className="screen">
+      <header className="topbar">
+        <button className="icon-button" onClick={onBack} aria-label="Back to today">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="topbar-fill">
+          <p className="eyebrow">Standalone timer</p>
+          <h1>Start a timer</h1>
+        </div>
+      </header>
+
+      <section className="timer-picker">
+        <h2>Activity</h2>
+        <div className="chip-row">
+          {(["cardio", "mobility", "strength", "recovery"] as const).map((type) => (
+            <button
+              key={type}
+              className={`chip ${activityType === type ? "active" : ""}`}
+              onClick={() => setActivityType(type)}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+
+        <h2>Label</h2>
+        <input
+          type="text"
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          placeholder="Walk, stretch, etc."
+        />
+
+        <h2>Duration</h2>
+        <div className="chip-row">
+          {[10, 20, 30, 45, 60].map((minutes) => (
+            <button
+              key={minutes}
+              className={`chip ${durationMinutes === minutes ? "active" : ""}`}
+              onClick={() => setDurationMinutes(minutes)}
+            >
+              {minutes} min
+            </button>
+          ))}
+          <input
+            type="number"
+            min={1}
+            max={240}
+            value={durationMinutes}
+            onChange={(event) => setDurationMinutes(Math.max(1, Number(event.target.value) || 1))}
+            className="duration-custom"
+            aria-label="Custom duration in minutes"
+          />
+        </div>
+      </section>
+
+      <button
+        className="full-button primary"
+        onClick={handleStart}
+        disabled={!label.trim() || durationMinutes < 1}
+      >
+        <Play size={20} />
+        Start {durationMinutes}-min {activityType}
+      </button>
+    </section>
+  );
+}
+
+function TimerRunningView({
+  timer,
+  onBack,
+  onCancel: _onCancel,
+}: {
+  timer: import("./types").PendingTimer;
+  onBack: () => void;
   onCancel: (timerId: string) => void;
 }) {
   return (
@@ -470,10 +571,10 @@ function TimerScreen({
           <ChevronLeft size={24} />
         </button>
         <div className="topbar-fill">
-          <h1>Timer</h1>
+          <h1>{timer.label}</h1>
         </div>
       </header>
-      <p>Stub — picker and running view come in Tasks 4 and 5.</p>
+      <p>Running view stub — implemented in Task 5.</p>
     </section>
   );
 }
