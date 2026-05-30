@@ -5,3 +5,5 @@ dist/
 .wrangler/
 workers/timer-fire/node_modules/
 .dev.vars
+*.xcuserstate
+xcuserdata/
