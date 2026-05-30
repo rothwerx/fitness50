@@ -5,6 +5,7 @@ This file provides guidance to Claude Code when working with this repository.
 ## Commands
 
 - `xcodebuild -project ios/Fitness50.xcodeproj -scheme Fitness50 -destination 'generic/platform=iOS' -derivedDataPath /private/tmp/fitness50-derived build` - build and typecheck the native iOS app.
+- `xcodebuild -project ios/Fitness50.xcodeproj -scheme Fitness50 -destination 'generic/platform=iOS' -derivedDataPath /private/tmp/fitness50-derived CODE_SIGNING_ALLOWED=NO build` - build in automation without requiring a local provisioning profile.
 
 There is no separate test target yet. Use the Xcode build as the verification step.
 
@@ -12,7 +13,7 @@ There is no separate test target yet. Use the Xcode build as the verification st
 
 Fitness50 is now a native SwiftUI iOS app. The previous React/Vite PWA, service worker, Pages Functions, and Cloudflare Worker timer infrastructure were removed after the native app reached feature parity.
 
-The app is local-only. State is persisted as JSON in the app documents directory at `fitness50-state.json`; there is no backend.
+The app is local-only and intended for direct installation on the owner's iPhone from Xcode, not App Store distribution. State is persisted as JSON in the app documents directory at `fitness50-state.json`; there is no backend.
 
 Key files:
 

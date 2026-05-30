@@ -2,6 +2,8 @@
 
 Fitness50 is now a native SwiftUI iOS app. The old React/Vite PWA and Web Push infrastructure have been removed from the repository.
 
+The app is intended for direct installation on the owner's iPhone from Xcode. No App Store distribution, archive export, TestFlight setup, or store metadata is planned.
+
 ## Implemented Feature Parity
 
 - 12-week beginner program with foundation, capacity, and momentum phases.
@@ -45,6 +47,14 @@ Build with:
 ```sh
 xcodebuild -project ios/Fitness50.xcodeproj -scheme Fitness50 -destination 'generic/platform=iOS' -derivedDataPath /private/tmp/fitness50-derived build
 ```
+
+For CI-style compile verification without a provisioning profile:
+
+```sh
+xcodebuild -project ios/Fitness50.xcodeproj -scheme Fitness50 -destination 'generic/platform=iOS' -derivedDataPath /private/tmp/fitness50-derived CODE_SIGNING_ALLOWED=NO build
+```
+
+For local iPhone installation, open `ios/Fitness50.xcodeproj` in Xcode, select the connected iPhone as the run destination, confirm the signing team, and run the Debug build.
 
 ## Later Enhancements
 
