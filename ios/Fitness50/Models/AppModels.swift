@@ -90,6 +90,14 @@ struct PendingTimer: Identifiable, Codable, Equatable {
     var sourceWorkoutId: String?
 }
 
+struct ReminderSettings: Codable, Equatable {
+    var enabled: Bool
+    var hour: Int
+    var minute: Int
+
+    static let defaultSettings = ReminderSettings(enabled: false, hour: 18, minute: 30)
+}
+
 struct DailySession: Identifiable, Codable, Equatable {
     var id: String { date }
 
@@ -112,6 +120,46 @@ struct AppState: Codable, Equatable {
     var easierToday: Bool
     var activeWorkoutId: String?
     var pendingTimers: [PendingTimer]
+    var reminderSettings: ReminderSettings
+
+    init(
+        profile: UserProfile,
+        startDate: String,
+        sessions: [String: DailySession],
+        easierToday: Bool,
+        activeWorkoutId: String?,
+        pendingTimers: [PendingTimer],
+        reminderSettings: ReminderSettings = .defaultSettings
+    ) {
+        self.profile = profile
+        self.startDate = startDate
+        self.sessions = sessions
+        self.easierToday = easierToday
+        self.activeWorkoutId = activeWorkoutId
+        self.pendingTimers = pendingTimers
+        self.reminderSettings = reminderSettings
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case profile
+        case startDate
+        case sessions
+        case easierToday
+        case activeWorkoutId
+        case pendingTimers
+        case reminderSettings
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        profile = try container.decode(UserProfile.self, forKey: .profile)
+        startDate = try container.decode(String.self, forKey: .startDate)
+        sessions = try container.decode([String: DailySession].self, forKey: .sessions)
+        easierToday = try container.decode(Bool.self, forKey: .easierToday)
+        activeWorkoutId = try container.decodeIfPresent(String.self, forKey: .activeWorkoutId)
+        pendingTimers = try container.decode([PendingTimer].self, forKey: .pendingTimers)
+        reminderSettings = try container.decodeIfPresent(ReminderSettings.self, forKey: .reminderSettings) ?? .defaultSettings
+    }
 
     static func defaultState(today: Date = Date()) -> AppState {
         AppState(
@@ -127,7 +175,8 @@ struct AppState: Codable, Equatable {
             sessions: [:],
             easierToday: false,
             activeWorkoutId: nil,
-            pendingTimers: []
+            pendingTimers: [],
+            reminderSettings: .defaultSettings
         )
     }
 }

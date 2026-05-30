@@ -18,6 +18,7 @@ final class SessionStore: ObservableObject {
     func load() {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             state = AppState.defaultState()
+            refreshReminders()
             return
         }
 
@@ -26,8 +27,10 @@ final class SessionStore: ObservableObject {
             var decoded = try DateCoding.jsonDecoder.decode(AppState.self, from: data)
             decoded = migrate(decoded)
             state = decoded
+            refreshReminders()
         } catch {
             state = AppState.defaultState()
+            refreshReminders()
         }
     }
 
@@ -73,6 +76,7 @@ final class SessionStore: ObservableObject {
     func upsert(_ session: DailySession) {
         state.sessions[session.date] = session
         save()
+        refreshReminders()
     }
 
     func completeWorkout(_ workoutId: String, date: String = DateCoding.dayString(from: Date())) {
@@ -138,6 +142,7 @@ final class SessionStore: ObservableObject {
         state.sessions[session.date] = session
         state.pendingTimers.removeAll { $0.id == timerId }
         save()
+        refreshReminders()
     }
 
     func updateRecovery(date: String = DateCoding.dayString(from: Date()), update: (inout DailySession) -> Void) {
@@ -154,6 +159,23 @@ final class SessionStore: ObservableObject {
     func setActiveWorkout(_ workoutId: String?) {
         state.activeWorkoutId = workoutId
         save()
+    }
+
+    func setReminderEnabled(_ enabled: Bool) {
+        state.reminderSettings.enabled = enabled
+        save()
+        refreshReminders()
+    }
+
+    func setReminderTime(hour: Int, minute: Int) {
+        state.reminderSettings.hour = min(max(hour, 0), 23)
+        state.reminderSettings.minute = min(max(minute, 0), 59)
+        save()
+        refreshReminders()
+    }
+
+    func refreshReminders() {
+        ReminderScheduler.reschedule(state: state)
     }
 
     func sessionsForLast(days count: Int, endingAt date: Date = Date()) -> [DailySession] {

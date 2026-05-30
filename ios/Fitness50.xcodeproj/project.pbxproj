@@ -21,6 +21,7 @@
 		0A000001000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000010D /* Assets.xcassets */; };
 		0A000001000000000000000D /* TimerScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000010E /* TimerScheduler.swift */; };
 		0A000001000000000000000E /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000001000000000000010F /* TimerView.swift */; };
+		0A000001000000000000000F /* ReminderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000010000000000000110 /* ReminderScheduler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +41,7 @@
 		0A000001000000000000010D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0A000001000000000000010E /* TimerScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerScheduler.swift; sourceTree = "<group>"; };
 		0A000001000000000000010F /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
+		0A0000010000000000000110 /* ReminderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderScheduler.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +91,7 @@
 				0A0000010000000000000104 /* Progression.swift */,
 				0A0000010000000000000105 /* SessionStore.swift */,
 				0A000001000000000000010E /* TimerScheduler.swift */,
+				0A0000010000000000000110 /* ReminderScheduler.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -205,6 +208,7 @@
 				0A000001000000000000000B /* RecoveryView.swift in Sources */,
 				0A000001000000000000000D /* TimerScheduler.swift in Sources */,
 				0A000001000000000000000E /* TimerView.swift in Sources */,
+				0A000001000000000000000F /* ReminderScheduler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

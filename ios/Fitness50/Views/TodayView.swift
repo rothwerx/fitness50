@@ -43,6 +43,14 @@ struct TodayView: View {
                     MetricTile(label: "Last 7", value: "\(store.lastSevenMovementDays()) days")
                 }
 
+                ReminderCard(
+                    enabled: Binding(
+                        get: { store.state.reminderSettings.enabled },
+                        set: { store.setReminderEnabled($0) }
+                    ),
+                    time: reminderTimeBinding
+                )
+
                 if let timer = store.state.pendingTimers.first {
                     Button(action: onOpenTimer) {
                         Label("\(timer.label) - see timer", systemImage: "timer")
@@ -128,6 +136,42 @@ struct TodayView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter.string(from: Date())
+    }
+
+    private var reminderTimeBinding: Binding<Date> {
+        Binding {
+            var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+            components.hour = store.state.reminderSettings.hour
+            components.minute = store.state.reminderSettings.minute
+            return Calendar.current.date(from: components) ?? Date()
+        } set: { date in
+            let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+            store.setReminderTime(
+                hour: components.hour ?? store.state.reminderSettings.hour,
+                minute: components.minute ?? store.state.reminderSettings.minute
+            )
+        }
+    }
+}
+
+private struct ReminderCard: View {
+    @Binding var enabled: Bool
+    @Binding var time: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: $enabled) {
+                Label("Workout reminders", systemImage: "bell")
+                    .font(.headline)
+            }
+
+            if enabled {
+                DatePicker("At", selection: $time, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.compact)
+            }
+        }
+        .padding(16)
+        .background(AppColors.secondaryBackground, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
