@@ -9,10 +9,14 @@ enum AppScreen: Hashable {
 }
 
 struct TimerPrefill: Hashable {
-    var durationMinutes: Int
+    var durationSeconds: Int
     var label: String
     var activityType: WorkoutType
     var sourceWorkoutId: String?
+
+    var durationMinutes: Int {
+        max(1, Int(ceil(Double(durationSeconds) / 60.0)))
+    }
 }
 
 struct ContentView: View {

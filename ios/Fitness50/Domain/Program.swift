@@ -123,7 +123,8 @@ enum Program {
         reps: Int,
         instructions: String,
         regressionRules: [String] = ["Reduce reps by 20-30%", "Shorten range of motion"],
-        targetSuffix: String? = nil
+        targetSuffix: String? = nil,
+        timerPresets: [ExerciseTimerPreset] = [restTimer()]
     ) -> Exercise {
         Exercise(
             id: id,
@@ -135,7 +136,8 @@ enum Program {
             targetSuffix: targetSuffix,
             defaultDuration: nil,
             targetLabel: nil,
-            instructions: instructions
+            instructions: instructions,
+            timerPresets: timerPresets
         )
     }
 
@@ -146,7 +148,8 @@ enum Program {
         seconds: Int,
         instructions: String,
         regressionRules: [String],
-        targetSuffix: String? = nil
+        targetSuffix: String? = nil,
+        timerPresets: [ExerciseTimerPreset]? = nil
     ) -> Exercise {
         Exercise(
             id: id,
@@ -158,7 +161,8 @@ enum Program {
             targetSuffix: targetSuffix,
             defaultDuration: seconds,
             targetLabel: nil,
-            instructions: instructions
+            instructions: instructions,
+            timerPresets: timerPresets ?? [workTimer(seconds: seconds)]
         )
     }
 
@@ -168,7 +172,8 @@ enum Program {
         category: WorkoutType,
         targetLabel: String,
         instructions: String,
-        regressionRules: [String]
+        regressionRules: [String],
+        timerPresets: [ExerciseTimerPreset] = []
     ) -> Exercise {
         Exercise(
             id: id,
@@ -180,8 +185,21 @@ enum Program {
             targetSuffix: nil,
             defaultDuration: nil,
             targetLabel: targetLabel,
-            instructions: instructions
+            instructions: instructions,
+            timerPresets: timerPresets
         )
+    }
+
+    private static func restTimer(seconds: Int = 60) -> ExerciseTimerPreset {
+        ExerciseTimerPreset(id: "rest-\(seconds)", label: "Rest", durationSeconds: seconds)
+    }
+
+    private static func workTimer(seconds: Int) -> ExerciseTimerPreset {
+        ExerciseTimerPreset(id: "work-\(seconds)", label: "Work", durationSeconds: seconds)
+    }
+
+    private static func timer(id: String, label: String, seconds: Int) -> ExerciseTimerPreset {
+        ExerciseTimerPreset(id: id, label: label, durationSeconds: seconds)
     }
 
     private static func makeWalk(minutes: Int, title: String = "Easy walk") -> Workout {
@@ -217,10 +235,10 @@ enum Program {
         rounds: nil,
         guidance: "Easy range of motion counts. Nothing here should feel forced.",
         exercises: [
-            customExercise(id: "shoulder-circles", name: "Shoulder circles", category: .mobility, targetLabel: "45 sec", instructions: "Slow circles forward and back.", regressionRules: ["Make smaller circles"]),
-            customExercise(id: "hip-circles", name: "Hip circles", category: .mobility, targetLabel: "45 sec each way", instructions: "Hold a chair if balance is useful.", regressionRules: ["Reduce range"]),
-            customExercise(id: "calf-stretch", name: "Calf stretch", category: .mobility, targetLabel: "45 sec each side", instructions: "Keep it gentle through calves and Achilles.", regressionRules: ["Bend the knee slightly"]),
-            customExercise(id: "hamstring-stretch", name: "Hamstring stretch", category: .mobility, targetLabel: "45 sec each side", instructions: "Hinge gently; avoid pulling hard.", regressionRules: ["Use a chair-supported version"]),
+            customExercise(id: "shoulder-circles", name: "Shoulder circles", category: .mobility, targetLabel: "45 sec", instructions: "Slow circles forward and back.", regressionRules: ["Make smaller circles"], timerPresets: [workTimer(seconds: 45)]),
+            customExercise(id: "hip-circles", name: "Hip circles", category: .mobility, targetLabel: "45 sec each way", instructions: "Hold a chair if balance is useful.", regressionRules: ["Reduce range"], timerPresets: [workTimer(seconds: 45)]),
+            customExercise(id: "calf-stretch", name: "Calf stretch", category: .mobility, targetLabel: "45 sec each side", instructions: "Keep it gentle through calves and Achilles.", regressionRules: ["Bend the knee slightly"], timerPresets: [workTimer(seconds: 45)]),
+            customExercise(id: "hamstring-stretch", name: "Hamstring stretch", category: .mobility, targetLabel: "45 sec each side", instructions: "Hinge gently; avoid pulling hard.", regressionRules: ["Use a chair-supported version"], timerPresets: [workTimer(seconds: 45)]),
             customExercise(id: "thoracic-twists", name: "Thoracic twists", category: .mobility, targetLabel: "8 each side", instructions: "Rotate through the upper back while breathing steadily.", regressionRules: ["Do seated twists"]),
             customExercise(id: "ankle-mobility", name: "Ankle mobility", category: .mobility, targetLabel: "8 each side", instructions: "Move the knee over the toes without pain.", regressionRules: ["Use a smaller range"])
         ]
@@ -314,10 +332,10 @@ enum Program {
             rounds: nil,
             guidance: "If jump rope bothers knees, calves, or Achilles tendons, switch to walking intervals immediately.",
             exercises: [
-                customExercise(id: "warm-walk", name: "Warm walk", category: .cardio, targetLabel: "5 min", instructions: "Start easy and let joints warm up.", regressionRules: ["Warm up longer if stiff"]),
-                customExercise(id: "jump-rope-option", name: "Option A: jump rope", category: .cardio, targetLabel: config.jump, instructions: "Keep jumps low and relaxed.", regressionRules: ["Switch to brisk walking intervals"]),
-                customExercise(id: "walking-option", name: "Option B: walking intervals", category: .cardio, targetLabel: config.walk, instructions: "Stay brisk, not breathless.", regressionRules: ["Shorten fast segments"]),
-                customExercise(id: "cooldown", name: "Easy cooldown", category: .cardio, targetLabel: "3-5 min", instructions: "Finish with relaxed walking.", regressionRules: ["Stop earlier if needed"])
+                customExercise(id: "warm-walk", name: "Warm walk", category: .cardio, targetLabel: "5 min", instructions: "Start easy and let joints warm up.", regressionRules: ["Warm up longer if stiff"], timerPresets: [timer(id: "warmup-300", label: "Warmup", seconds: 300)]),
+                customExercise(id: "jump-rope-option", name: "Option A: jump rope", category: .cardio, targetLabel: config.jump, instructions: "Keep jumps low and relaxed.", regressionRules: ["Switch to brisk walking intervals"], timerPresets: [timer(id: "interval-work-60", label: "Interval", seconds: 60)]),
+                customExercise(id: "walking-option", name: "Option B: walking intervals", category: .cardio, targetLabel: config.walk, instructions: "Stay brisk, not breathless.", regressionRules: ["Shorten fast segments"], timerPresets: [timer(id: "interval-work-120", label: "Interval", seconds: 120)]),
+                customExercise(id: "cooldown", name: "Easy cooldown", category: .cardio, targetLabel: "3-5 min", instructions: "Finish with relaxed walking.", regressionRules: ["Stop earlier if needed"], timerPresets: [timer(id: "cooldown-300", label: "Cooldown", seconds: 300)])
             ]
         )
     }

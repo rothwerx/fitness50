@@ -8,14 +8,14 @@ struct TimerView: View {
 
     @State private var activityType: WorkoutType
     @State private var label: String
-    @State private var durationMinutes: Int
+    @State private var durationSeconds: Int
 
     init(prefill: TimerPrefill?, onBack: @escaping () -> Void) {
         self.prefill = prefill
         self.onBack = onBack
         _activityType = State(initialValue: prefill?.activityType ?? .cardio)
         _label = State(initialValue: prefill?.label ?? "Walk")
-        _durationMinutes = State(initialValue: prefill?.durationMinutes ?? 30)
+        _durationSeconds = State(initialValue: prefill?.durationSeconds ?? 30 * 60)
     }
 
     var body: some View {
@@ -55,16 +55,16 @@ struct TimerView: View {
                             .font(.headline)
                             .padding(.top, 4)
 
-                        DurationPicker(durationMinutes: $durationMinutes)
+                        DurationPicker(durationSeconds: $durationSeconds)
                     }
                     .padding(16)
                     .background(AppColors.secondaryBackground, in: RoundedRectangle(cornerRadius: 8))
 
                     Button(action: startTimer) {
-                        Label("Start \(durationMinutes)-min \(activityType.rawValue)", systemImage: "play.fill")
+                        Label("Start \(formattedDuration(durationSeconds)) \(activityType.rawValue)", systemImage: "play.fill")
                     }
                     .buttonStyle(PrimaryButtonStyle())
-                    .disabled(label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || durationMinutes < 1)
+                    .disabled(label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || durationSeconds < 1)
                 }
                 .padding(20)
             }
@@ -74,36 +74,64 @@ struct TimerView: View {
     private func startTimer() {
         let timer = PendingTimer(
             id: UUID(),
-            fireAt: Date().addingTimeInterval(TimeInterval(durationMinutes * 60)),
+            fireAt: Date().addingTimeInterval(TimeInterval(durationSeconds)),
             label: label.trimmingCharacters(in: .whitespacesAndNewlines),
             activityType: activityType,
-            durationMinutes: durationMinutes,
+            durationSeconds: durationSeconds,
             sourceWorkoutId: prefill?.sourceWorkoutId
         )
         store.startTimer(timer)
     }
+
+    private func formattedDuration(_ seconds: Int) -> String {
+        if seconds < 60 {
+            return "\(seconds)-sec"
+        }
+
+        let minutes = seconds / 60
+        let remainingSeconds = seconds % 60
+        if remainingSeconds == 0 {
+            return "\(minutes)-min"
+        }
+
+        return "\(minutes)-min \(remainingSeconds)-sec"
+    }
 }
 
 private struct DurationPicker: View {
-    @Binding var durationMinutes: Int
+    @Binding var durationSeconds: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 8) {
-                ForEach([10, 20, 30, 45, 60], id: \.self) { minutes in
-                    Button("\(minutes) min") {
-                        durationMinutes = minutes
+                ForEach([30, 45, 60, 120, 300, 600, 1200, 1800, 2700, 3600], id: \.self) { seconds in
+                    Button(formatDuration(seconds)) {
+                        durationSeconds = seconds
                     }
                     .buttonStyle(.bordered)
-                    .tint(durationMinutes == minutes ? .accentColor : .secondary)
+                    .tint(durationSeconds == seconds ? .accentColor : .secondary)
                 }
             }
 
-            Stepper(value: $durationMinutes, in: 1...240) {
-                Text("\(durationMinutes) min")
+            Stepper(value: $durationSeconds, in: 15...(240 * 60), step: 15) {
+                Text(formatDuration(durationSeconds))
                     .font(.headline.monospacedDigit())
             }
         }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 {
+            return "\(seconds) sec"
+        }
+
+        let minutes = seconds / 60
+        let remainingSeconds = seconds % 60
+        if remainingSeconds == 0 {
+            return "\(minutes) min"
+        }
+
+        return "\(minutes)m \(remainingSeconds)s"
     }
 }
 

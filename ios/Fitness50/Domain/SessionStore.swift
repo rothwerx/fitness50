@@ -44,7 +44,7 @@ final class SessionStore: ObservableObject {
     }
 
     func session(for date: String = DateCoding.dayString(from: Date())) -> DailySession {
-        let plannedWorkouts = Program.plan(startDate: state.startDate, date: date)
+        let plannedWorkouts = effectivePlan(for: date)
 
         if var saved = state.sessions[date] {
             saved.plannedWorkouts = plannedWorkouts
@@ -96,6 +96,61 @@ final class SessionStore: ObservableObject {
             session.skippedWorkouts.append(workoutId)
         }
         upsert(session)
+    }
+
+    func moveWorkoutToTomorrow(_ workoutId: String, date: String = DateCoding.dayString(from: Date())) {
+        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: DateCoding.date(fromDay: date)) else {
+            return
+        }
+
+        let tomorrowDay = DateCoding.dayString(from: tomorrow)
+        addRescheduledWorkout(workoutId, to: tomorrowDay)
+        removeRescheduledWorkout(workoutId, from: date)
+
+        var session = session(for: date)
+        if !session.skippedWorkouts.contains(workoutId) {
+            session.skippedWorkouts.append(workoutId)
+        }
+        state.sessions[date] = session
+        save()
+        refreshReminders()
+    }
+
+    func moveMissedWorkoutToToday(_ workoutId: String, from missedDate: String, today: String = DateCoding.dayString(from: Date())) {
+        addRescheduledWorkout(workoutId, to: today)
+
+        var missedSession = session(for: missedDate)
+        if !missedSession.skippedWorkouts.contains(workoutId) {
+            missedSession.skippedWorkouts.append(workoutId)
+        }
+        state.sessions[missedDate] = missedSession
+        save()
+        refreshReminders()
+    }
+
+    func clearRescheduledWorkout(_ workoutId: String, date: String = DateCoding.dayString(from: Date())) {
+        state.rescheduledWorkouts[date]?.removeAll { $0 == workoutId }
+        if state.rescheduledWorkouts[date]?.isEmpty == true {
+            state.rescheduledWorkouts.removeValue(forKey: date)
+        }
+        save()
+        refreshReminders()
+    }
+
+    func missedWorkoutsFromYesterday(today: Date = Date()) -> [(date: String, workout: Workout)] {
+        guard let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today) else {
+            return []
+        }
+
+        let yesterdayDay = DateCoding.dayString(from: yesterday)
+        let session = session(for: yesterdayDay)
+        let handled = Set(session.completedWorkouts + session.skippedWorkouts)
+
+        return session.plannedWorkouts.compactMap { workoutId in
+            guard !handled.contains(workoutId) else { return nil }
+            guard let workout = Program.workout(id: workoutId, startDate: state.startDate, date: yesterdayDay) else { return nil }
+            return (date: yesterdayDay, workout: workout)
+        }
     }
 
     func startTimer(_ timer: PendingTimer) {
@@ -198,6 +253,38 @@ final class SessionStore: ObservableObject {
         if migrated.profile.goals.isEmpty {
             migrated.profile.goals = AppState.defaultState().profile.goals
         }
+        migrated.rescheduledWorkouts = migrated.rescheduledWorkouts.reduce(into: [:]) { result, entry in
+            let uniqueWorkouts = unique(entry.value)
+            if !uniqueWorkouts.isEmpty {
+                result[entry.key] = uniqueWorkouts
+            }
+        }
         return migrated
+    }
+
+    private func effectivePlan(for date: String) -> [String] {
+        let basePlan = Program.plan(startDate: state.startDate, date: date)
+        let carriedWorkouts = state.rescheduledWorkouts[date] ?? []
+        return unique(basePlan + carriedWorkouts)
+    }
+
+    private func addRescheduledWorkout(_ workoutId: String, to date: String) {
+        var workouts = state.rescheduledWorkouts[date] ?? []
+        if !workouts.contains(workoutId) {
+            workouts.append(workoutId)
+        }
+        state.rescheduledWorkouts[date] = workouts
+    }
+
+    private func removeRescheduledWorkout(_ workoutId: String, from date: String) {
+        state.rescheduledWorkouts[date]?.removeAll { $0 == workoutId }
+        if state.rescheduledWorkouts[date]?.isEmpty == true {
+            state.rescheduledWorkouts.removeValue(forKey: date)
+        }
+    }
+
+    private func unique(_ workoutIds: [String]) -> [String] {
+        var seen = Set<String>()
+        return workoutIds.filter { seen.insert($0).inserted }
     }
 }

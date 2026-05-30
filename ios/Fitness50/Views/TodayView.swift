@@ -13,6 +13,7 @@ struct TodayView: View {
     private var session: DailySession { store.session(for: today) }
     private var workouts: [Workout] { store.workouts(for: session) }
     private var firedTimers: [PendingTimer] { store.firedTimers(now: now) }
+    private var missedWorkouts: [(date: String, workout: Workout)] { store.missedWorkoutsFromYesterday() }
 
     var body: some View {
         let advice = Progression.recoveryAdvice(for: session)
@@ -95,6 +96,18 @@ struct TodayView: View {
                 }
                 .buttonStyle(.bordered)
 
+                ForEach(missedWorkouts, id: \.workout.id) { missed in
+                    MissedWorkoutCard(
+                        workout: missed.workout,
+                        onMoveToToday: {
+                            store.moveMissedWorkoutToToday(missed.workout.id, from: missed.date, today: today)
+                        },
+                        onSkip: {
+                            store.toggleSkippedWorkout(missed.workout.id, date: missed.date)
+                        }
+                    )
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Planned movement")
                         .font(.title2.weight(.bold))
@@ -104,9 +117,12 @@ struct TodayView: View {
                             workout: workout,
                             done: session.completedWorkouts.contains(workout.id),
                             skipped: session.skippedWorkouts.contains(workout.id),
+                            rescheduled: store.state.rescheduledWorkouts[today]?.contains(workout.id) == true,
                             onStart: { onOpenWorkout(workout.id) },
                             onDone: { store.completeWorkout(workout.id) },
-                            onSkip: { store.toggleSkippedWorkout(workout.id) }
+                            onSkip: { store.toggleSkippedWorkout(workout.id) },
+                            onMoveToTomorrow: { store.moveWorkoutToTomorrow(workout.id, date: today) },
+                            onKeepCalendar: { store.clearRescheduledWorkout(workout.id, date: today) }
                         )
                     }
                 }
@@ -175,13 +191,61 @@ private struct ReminderCard: View {
     }
 }
 
+private struct MissedWorkoutCard: View {
+    var workout: Workout
+    var onMoveToToday: () -> Void
+    var onSkip: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "arrow.turn.down.right")
+                    .font(.title2)
+                    .frame(width: 32)
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Missed yesterday")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(workout.title)
+                        .font(.headline)
+                    Text("\(workout.estimatedDuration) min - \(workout.type.rawValue)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button(action: onMoveToToday) {
+                    Label("Do today", systemImage: "calendar.badge.plus")
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button(action: onSkip) {
+                    Label("Skip", systemImage: "minus")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 private struct WorkoutCard: View {
     var workout: Workout
     var done: Bool
     var skipped: Bool
+    var rescheduled: Bool
     var onStart: () -> Void
     var onDone: () -> Void
     var onSkip: () -> Void
+    var onMoveToTomorrow: () -> Void
+    var onKeepCalendar: () -> Void
+
+    @State private var showingSkipOptions = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -201,6 +265,11 @@ private struct WorkoutCard: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
+                    if rescheduled {
+                        Label("Carried forward", systemImage: "arrow.forward")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
                 }
                 Spacer()
             }
@@ -218,14 +287,36 @@ private struct WorkoutCard: View {
                 .buttonStyle(.bordered)
                 .disabled(done)
 
-                Button(action: onSkip) {
+                Button {
+                    showingSkipOptions = true
+                } label: {
                     Image(systemName: skipped ? "arrow.counterclockwise" : "minus")
                 }
                 .buttonStyle(.bordered)
+                .disabled(done)
                 .accessibilityLabel(skipped ? "Undo skip \(workout.title)" : "Skip \(workout.title)")
             }
         }
         .padding(16)
         .background(done ? Color.green.opacity(0.10) : AppColors.secondaryBackground, in: RoundedRectangle(cornerRadius: 8))
+        .confirmationDialog("Change \(workout.title)", isPresented: $showingSkipOptions, titleVisibility: .visible) {
+            Button("Move to tomorrow") {
+                onMoveToTomorrow()
+            }
+
+            Button(skipped ? "Undo skip" : "Mark skipped") {
+                onSkip()
+            }
+
+            if rescheduled {
+                Button("Remove carry-forward") {
+                    onKeepCalendar()
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Keep the calendar as-is, mark it skipped, or carry this workout forward.")
+        }
     }
 }

@@ -51,6 +51,13 @@ struct Exercise: Identifiable, Codable, Equatable {
     var defaultDuration: Int?
     var targetLabel: String?
     var instructions: String
+    var timerPresets: [ExerciseTimerPreset]
+}
+
+struct ExerciseTimerPreset: Identifiable, Codable, Equatable {
+    var id: String
+    var label: String
+    var durationSeconds: Int
 }
 
 struct Workout: Identifiable, Codable, Equatable {
@@ -86,8 +93,63 @@ struct PendingTimer: Identifiable, Codable, Equatable {
     var fireAt: Date
     var label: String
     var activityType: WorkoutType
-    var durationMinutes: Int
+    var durationSeconds: Int
     var sourceWorkoutId: String?
+
+    var durationMinutes: Int {
+        max(1, Int(ceil(Double(durationSeconds) / 60.0)))
+    }
+
+    init(
+        id: UUID,
+        fireAt: Date,
+        label: String,
+        activityType: WorkoutType,
+        durationSeconds: Int,
+        sourceWorkoutId: String?
+    ) {
+        self.id = id
+        self.fireAt = fireAt
+        self.label = label
+        self.activityType = activityType
+        self.durationSeconds = max(1, durationSeconds)
+        self.sourceWorkoutId = sourceWorkoutId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case fireAt
+        case label
+        case activityType
+        case durationSeconds
+        case durationMinutes
+        case sourceWorkoutId
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        fireAt = try container.decode(Date.self, forKey: .fireAt)
+        label = try container.decode(String.self, forKey: .label)
+        activityType = try container.decode(WorkoutType.self, forKey: .activityType)
+        if let decodedSeconds = try container.decodeIfPresent(Int.self, forKey: .durationSeconds) {
+            durationSeconds = max(1, decodedSeconds)
+        } else {
+            let decodedMinutes = try container.decode(Int.self, forKey: .durationMinutes)
+            durationSeconds = max(1, decodedMinutes * 60)
+        }
+        sourceWorkoutId = try container.decodeIfPresent(String.self, forKey: .sourceWorkoutId)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(fireAt, forKey: .fireAt)
+        try container.encode(label, forKey: .label)
+        try container.encode(activityType, forKey: .activityType)
+        try container.encode(durationSeconds, forKey: .durationSeconds)
+        try container.encode(sourceWorkoutId, forKey: .sourceWorkoutId)
+    }
 }
 
 struct ReminderSettings: Codable, Equatable {
@@ -121,6 +183,7 @@ struct AppState: Codable, Equatable {
     var activeWorkoutId: String?
     var pendingTimers: [PendingTimer]
     var reminderSettings: ReminderSettings
+    var rescheduledWorkouts: [String: [String]]
 
     init(
         profile: UserProfile,
@@ -129,7 +192,8 @@ struct AppState: Codable, Equatable {
         easierToday: Bool,
         activeWorkoutId: String?,
         pendingTimers: [PendingTimer],
-        reminderSettings: ReminderSettings = .defaultSettings
+        reminderSettings: ReminderSettings = .defaultSettings,
+        rescheduledWorkouts: [String: [String]] = [:]
     ) {
         self.profile = profile
         self.startDate = startDate
@@ -138,6 +202,7 @@ struct AppState: Codable, Equatable {
         self.activeWorkoutId = activeWorkoutId
         self.pendingTimers = pendingTimers
         self.reminderSettings = reminderSettings
+        self.rescheduledWorkouts = rescheduledWorkouts
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -148,6 +213,7 @@ struct AppState: Codable, Equatable {
         case activeWorkoutId
         case pendingTimers
         case reminderSettings
+        case rescheduledWorkouts
     }
 
     init(from decoder: Decoder) throws {
@@ -159,6 +225,7 @@ struct AppState: Codable, Equatable {
         activeWorkoutId = try container.decodeIfPresent(String.self, forKey: .activeWorkoutId)
         pendingTimers = try container.decode([PendingTimer].self, forKey: .pendingTimers)
         reminderSettings = try container.decodeIfPresent(ReminderSettings.self, forKey: .reminderSettings) ?? .defaultSettings
+        rescheduledWorkouts = try container.decodeIfPresent([String: [String]].self, forKey: .rescheduledWorkouts) ?? [:]
     }
 
     static func defaultState(today: Date = Date()) -> AppState {
@@ -176,7 +243,8 @@ struct AppState: Codable, Equatable {
             easierToday: false,
             activeWorkoutId: nil,
             pendingTimers: [],
-            reminderSettings: .defaultSettings
+            reminderSettings: .defaultSettings,
+            rescheduledWorkouts: [:]
         )
     }
 }

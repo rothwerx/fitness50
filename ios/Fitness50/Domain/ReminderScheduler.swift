@@ -60,7 +60,10 @@ enum ReminderScheduler {
             }
 
             let dayString = DateCoding.dayString(from: day)
-            let plannedWorkouts = Program.plan(startDate: state.startDate, date: dayString)
+            let plannedWorkouts = unique(
+                Program.plan(startDate: state.startDate, date: dayString)
+                + (state.rescheduledWorkouts[dayString] ?? [])
+            )
             guard !plannedWorkouts.isEmpty else { return nil }
 
             if let saved = state.sessions[dayString] {
@@ -107,5 +110,10 @@ enum ReminderScheduler {
 
     private static func identifier(for day: String) -> String {
         "\(identifierPrefix)\(day)"
+    }
+
+    private static func unique(_ workoutIds: [String]) -> [String] {
+        var seen = Set<String>()
+        return workoutIds.filter { seen.insert($0).inserted }
     }
 }
